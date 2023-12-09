@@ -37,13 +37,13 @@ async fn hello_world() -> &'static str {
 }
 
 async fn strength(Json(vec_reindeer): Json<Vec<Reindeer>>) -> impl IntoResponse {
-    println!("🦌 DATA = {:?}", vec_reindeer);
+    tracing::info!("🦌 DATA = {:?}", vec_reindeer);
 
     Json(vec_reindeer.iter().map(|r| r.strength).sum::<i32>())
 }
 
 async fn contest(Json(vec_contesting): Json<Vec<ContestingReindeer>>) -> impl IntoResponse {
-    println!("CONTESTING 🦌 LIST = {:?}", vec_contesting);
+    tracing::info!("CONTESTING 🦌 LIST = {:?}", vec_contesting);
 
     let result = compare(vec_contesting);
 
