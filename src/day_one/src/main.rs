@@ -45,7 +45,6 @@ async fn cube(Path(vec_path): Path<String>) -> impl IntoResponse {
 async fn main() -> shuttle_axum::ShuttleAxum {
     let router = Router::new()
         .route("/", get(hello_world))
-        // .route("/1/:num1/:num2/:num3/:num4/:num5/:num6/:num7/:num8/:num9/:num10/:num11/:num12/:num13/:num14/:num15/:num16/:num17/:num18/:num19/:num20", get(cube));
         .route("/1/*key", get(cube));
 
     Ok(router.into())
