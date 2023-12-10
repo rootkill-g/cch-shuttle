@@ -10,25 +10,19 @@ use utils::compare::compare;
 
 #[derive(Debug, Deserialize)]
 struct Reindeer {
-    // To mitigate the compiler warning about "name" not being used
-    // we added "_" prefix to name but the
-    // Data received will have variable "name" instead of "_name"
-    // so to properly deserialize the data received we use serde rename
-    #[serde(rename = "name")]
-    _name: String,
-    strength: i32,
-}
-
-#[derive(Debug, Deserialize)]
-struct ContestingReindeer {
     name: String,
     strength: i32,
+    #[serde(default)]
     speed: f64,
+    #[serde(default)]
     height: i32,
+    #[serde(default)]
     antler_width: i32,
+    #[serde(default)]
     snow_magic_power: i32,
+    #[serde(default)]
     favorite_food: String,
-    #[serde(rename = "cAnD13s_3ATeN-yesT3rdAy")]
+    #[serde(default, rename = "cAnD13s_3ATeN-yesT3rdAy")]
     candies_eaten_yesterday: i32,
 }
 
@@ -42,7 +36,7 @@ async fn strength(Json(vec_reindeer): Json<Vec<Reindeer>>) -> impl IntoResponse 
     Json(vec_reindeer.iter().map(|r| r.strength).sum::<i32>())
 }
 
-async fn contest(Json(vec_contesting): Json<Vec<ContestingReindeer>>) -> impl IntoResponse {
+async fn contest(Json(vec_contesting): Json<Vec<Reindeer>>) -> impl IntoResponse {
     tracing::info!("CONTESTING 🦌 LIST = {:?}", vec_contesting);
 
     let result = compare(vec_contesting);

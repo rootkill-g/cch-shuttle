@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::ContestingReindeer;
+use crate::Reindeer;
 
 #[derive(Debug, Serialize)]
 pub struct ContestResult {
@@ -10,7 +10,7 @@ pub struct ContestResult {
     consumer: String,
 }
 
-pub fn compare(contest_reindeers: Vec<ContestingReindeer>) -> ContestResult {
+pub fn compare(contest_reindeers: Vec<Reindeer>) -> ContestResult {
     let fastest = contest_reindeers
         .iter()
         .max_by(|r1, r2| r1.speed.total_cmp(&r2.speed))
