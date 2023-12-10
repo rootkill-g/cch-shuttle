@@ -1,10 +1,6 @@
-use axum::{extract::Path, http::StatusCode, response::IntoResponse, routing::get, Router};
+use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 
-async fn hello_world() -> &'static str {
-    "Hello, world!"
-}
-
-async fn cube(Path(vec_path): Path<String>) -> impl IntoResponse {
+pub async fn cube(Path(vec_path): Path<String>) -> impl IntoResponse {
     println!("🧊 #> {:<12} - cube - {vec_path:?}", "HANDLER");
 
     for c in vec_path.chars() {
@@ -39,13 +35,4 @@ async fn cube(Path(vec_path): Path<String>) -> impl IntoResponse {
     let res = xor_res.pow(3);
 
     (StatusCode::OK, format!("{}", res))
-}
-
-#[shuttle_runtime::main]
-async fn main() -> shuttle_axum::ShuttleAxum {
-    let router = Router::new()
-        .route("/", get(hello_world))
-        .route("/1/*key", get(cube));
-
-    Ok(router.into())
 }

@@ -1,7 +1,6 @@
 mod routes;
 
 use axum::{routing::get, Router};
-
 use routes::{fake_error, hello_world};
 
 pub fn routes() -> Router {
