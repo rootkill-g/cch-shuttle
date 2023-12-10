@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+use std::collections::HashMap;
 
 use axum::{
     http::{HeaderMap, Request, StatusCode},
@@ -8,6 +8,7 @@ use axum::{
 };
 use base64::{engine::general_purpose, Engine};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Debug, Deserialize)]
 struct Recipe {
@@ -31,16 +32,20 @@ struct Pantry {
     chocolate_chips: i32,
 }
 
-#[derive(Debug, Deserialize)]
-struct ReqJson {
-    recipe: Recipe,
-    pantry: Pantry,
-}
-
 #[derive(Debug, Serialize)]
 struct BakeResponse {
     cookie: i32,
-    pantry: Pantry,
+    pantry: Value,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct AnyStruct {
+    fields: HashMap<String, Value>,
+}
+
+fn parse_json_to_any_struct(json_string: &str) -> Result<AnyStruct, serde_json::Error> {
+    let data: HashMap<String, Value> = serde_json::from_str(json_string)?;
+    Ok(AnyStruct { fields: data })
 }
 
 fn parse(hmap: &HeaderMap) -> Result<String, StatusCode> {
@@ -77,19 +82,32 @@ async fn bake<B>(req: Request<B>) -> impl IntoResponse {
 
     tracing::info!("bake => COOKIE: {:?}", cookie);
 
-    let recpan: ReqJson = serde_json::from_str(cookie.as_str()).unwrap();
+    let recpan = parse_json_to_any_struct(&cookie).unwrap();
 
-    let recipe = recpan.recipe;
+    tracing::info!("bake => RECPAN: {:?}", recpan.fields);
+
+    let recipe: Recipe =
+        match serde_json::from_value(recpan.fields.get("recipe").unwrap().to_owned()) {
+            Ok(rec) => rec,
+            Err(_) => {
+                let pantry = recpan.fields.get("pantry").unwrap().to_owned();
+
+                tracing::info!("bake => PANTRY: {:?}", pantry);
+
+                return Ok(Json(BakeResponse { cookie: 0, pantry }));
+            }
+        };
 
     tracing::info!("bake => RECIPE: {:?}", recipe);
 
-    let pantry = recpan.pantry;
+    let pantry: Pantry =
+        serde_json::from_value(recpan.fields.get("pantry").unwrap().to_owned()).unwrap();
 
     tracing::info!("bake => PANTRY: {:?}", pantry);
 
     let cooked_cookies = pantry.flour / recipe.flour;
 
-    let left_in_pantry: Pantry = Pantry {
+    let left_pantry: Pantry = Pantry {
         flour: pantry.flour - (cooked_cookies * recipe.flour),
         sugar: pantry.sugar - (cooked_cookies * recipe.sugar),
         butter: pantry.butter - (cooked_cookies * recipe.butter),
@@ -97,12 +115,15 @@ async fn bake<B>(req: Request<B>) -> impl IntoResponse {
         chocolate_chips: pantry.chocolate_chips - (cooked_cookies * recipe.chocolate_chips),
     };
 
-    let bake_response: BakeResponse = BakeResponse {
+    let bake_result: BakeResponse = BakeResponse {
         cookie: cooked_cookies,
-        pantry: left_in_pantry,
+        pantry: match serde_json::to_value(left_pantry) {
+            Ok(pantry) => pantry,
+            Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+        },
     };
 
-    Ok(Json(bake_response))
+    Ok(Json(bake_result))
 }
 
 async fn hello() -> impl IntoResponse {
