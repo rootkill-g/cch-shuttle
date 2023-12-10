@@ -103,7 +103,18 @@ async fn bake<B>(req: Request<B>) -> impl IntoResponse {
     tracing::info!("bake => RECIPE: {:?}", recipe);
 
     let pantry: Pantry =
-        serde_json::from_value(recpan.fields.get("pantry").unwrap().to_owned()).unwrap();
+        match serde_json::from_value(recpan.fields.get("pantry").unwrap().to_owned()) {
+            Ok(pan) => pan,
+            Err(_) => {
+                // This means the request was sent by an Elf
+                // So we create a response specifically for Elves
+                let pantry = recpan.fields.get("pantry").unwrap().to_owned();
+
+                tracing::info!("bake => PANTRY: {:?}", pantry);
+
+                return Ok(Json(BakeResponse { cookie: 0, pantry }));
+            }
+        };
 
     tracing::info!("bake => PANTRY: {:?}", pantry);
 
