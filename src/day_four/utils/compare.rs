@@ -1,6 +1,5 @@
+use super::super::routes::Reindeer;
 use serde::Serialize;
-
-use crate::Reindeer;
 
 #[derive(Debug, Serialize)]
 pub struct ContestResult {

@@ -1,3 +1,4 @@
+mod day_four;
 mod day_minus_one;
 mod day_one;
 
@@ -19,6 +20,7 @@ async fn main() -> shuttle_axum::ShuttleAxum {
     let router = Router::new()
         .merge(day_minus_one::routes())
         .merge(day_one::routes())
+        .merge(day_four::routes())
         .fallback(fallback);
 
     Ok(router.into())
