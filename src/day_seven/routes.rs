@@ -2,9 +2,8 @@ use std::collections::HashMap;
 
 use axum::{
     http::{HeaderMap, Request, StatusCode},
-    response::{ErrorResponse, Html, IntoResponse},
-    routing::get,
-    Json, Router,
+    response::{ErrorResponse, IntoResponse},
+    Json,
 };
 use base64::{engine::general_purpose, Engine};
 use serde::{Deserialize, Serialize};
@@ -67,12 +66,12 @@ fn parse(hmap: &HeaderMap) -> Result<String, StatusCode> {
     }
 }
 
-async fn decode<B>(req: Request<B>) -> Result<Json<String>, ErrorResponse> {
+pub async fn decode<B>(req: Request<B>) -> Result<Json<String>, ErrorResponse> {
     tracing::info!("decode => RECEIVED: {:?}", req.headers());
     Ok(Json(parse(req.headers())?))
 }
 
-async fn bake<B>(req: Request<B>) -> impl IntoResponse {
+pub async fn bake<B>(req: Request<B>) -> impl IntoResponse {
     tracing::info!("bake => RECEIVED: {:?}", req.headers());
 
     let cookie = match parse(req.headers()) {
@@ -135,18 +134,4 @@ async fn bake<B>(req: Request<B>) -> impl IntoResponse {
             Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
         },
     }))
-}
-
-async fn hello() -> impl IntoResponse {
-    Html("<h1>Hello, World!</h1>")
-}
-
-#[shuttle_runtime::main]
-async fn main() -> shuttle_axum::ShuttleAxum {
-    let router = Router::new()
-        .route("/", get(hello))
-        .route("/7/decode", get(decode))
-        .route("/7/bake", get(bake));
-
-    Ok(router.into())
 }
