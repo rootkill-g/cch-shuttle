@@ -1,38 +1,16 @@
+#![allow(clippy::manual_try_fold)]
 use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 
 pub async fn cube(Path(vec_path): Path<String>) -> impl IntoResponse {
     println!("🧊 #> {:<12} - cube - {vec_path:?}", "HANDLER");
 
-    for c in vec_path.chars() {
-        if !c.is_ascii_digit() && c != '/' {
-            return (
-                StatusCode::BAD_REQUEST,
-                String::from("Invalid packets, only integers are allowed!"),
-            );
-        }
-    }
-
-    let separated: Vec<i32> = vec_path
+    vec_path
         .split('/')
-        .map(|v| v.parse::<i32>().unwrap())
-        .collect();
-
-    println!("Separated = {:?}", separated);
-
-    if separated.len() < 1 || separated.len() > 20 {
-        return (
-            StatusCode::BAD_REQUEST,
-            String::from("Invalid number of packets!"),
-        );
-    }
-
-    let mut xor_res = 0;
-
-    for pk in separated {
-        xor_res ^= pk;
-    }
-
-    let res = xor_res.pow(3);
-
-    (StatusCode::OK, format!("{}", res))
+        .map(|v| v.parse::<i64>().map_err(|_| StatusCode::BAD_REQUEST))
+        .fold(Ok(0), |acc, e| match (acc, e) {
+            (Ok(x), Ok(y)) => Ok(x ^ y),
+            (Ok(_), Err(_)) | (Err(_), Ok(_)) | (Err(_), Err(_)) => Err(StatusCode::BAD_REQUEST),
+        })
+        .map(|acc| Ok(format!("{}", acc.pow(3))))
+        .unwrap_or(Err(StatusCode::INTERNAL_SERVER_ERROR))
 }

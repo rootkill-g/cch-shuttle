@@ -1,0 +1,13 @@
+use axum::{extract::Path, http::StatusCode, response::IntoResponse};
+
+pub async fn cube(Path(vec_path): Path<String>) -> impl IntoResponse {
+    println!("🧊 #> {:<12} - cube - {vec_path:?}", "HANDLER");
+
+    let separated = vec_path
+        .split('/')
+        .map(|v| v.parse::<i32>())
+        .fold(0, |acc, e| match (acc, e) {
+            (Ok(x), Ok(y)) => Ok(x ^ y),
+            (Ok(_), Err(err)) | (Err(err), Ok(_)) | (Err(err), Err(_)) => Err(err),
+        });
+}
