@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+#![allow(unused_assignments)]
 
 use axum::{
     http::{HeaderMap, Request, StatusCode},
@@ -8,43 +8,88 @@ use axum::{
 use base64::{engine::general_purpose, Engine};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-
-#[derive(Debug, Deserialize)]
-struct Recipe {
-    flour: i32,
-    sugar: i32,
-    butter: i32,
-    #[serde(rename = "baking powder")]
-    baking_powder: i32,
-    #[serde(rename = "chocolate chips")]
-    chocolate_chips: i32,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-struct Pantry {
-    flour: i32,
-    sugar: i32,
-    butter: i32,
-    #[serde(rename = "baking powder")]
-    baking_powder: i32,
-    #[serde(rename = "chocolate chips")]
-    chocolate_chips: i32,
-}
+use std::collections::HashMap;
 
 #[derive(Debug, Serialize)]
 struct BakeResponse {
-    cookie: i32,
-    pantry: Value,
+    cookie: u64,
+    pantry: HashMap<String, Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct AnyStruct {
+struct Cookie {
     fields: HashMap<String, Value>,
 }
 
-fn parse_json_to_any_struct(json_string: &str) -> Result<AnyStruct, serde_json::Error> {
+#[derive(Debug, Serialize, Deserialize)]
+struct Recipe {
+    ingredients: HashMap<String, Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Pantry {
+    stock: HashMap<String, Value>,
+}
+
+fn parse_json_cookie(json_string: &str) -> Result<Cookie, serde_json::Error> {
     let data: HashMap<String, Value> = serde_json::from_str(json_string)?;
-    Ok(AnyStruct { fields: data })
+    Ok(Cookie { fields: data })
+}
+
+fn parse_value_to_recipe(val: Value) -> Result<Recipe, serde_json::Error> {
+    let data: HashMap<String, Value> = serde_json::from_value(val)?;
+    Ok(Recipe { ingredients: data })
+}
+
+fn parse_value_to_pantry(val: Value) -> Result<Pantry, serde_json::Error> {
+    let data: HashMap<String, Value> = serde_json::from_value(val)?;
+    Ok(Pantry { stock: data })
+}
+
+fn total_baked(recipe: &Recipe, pantry: &Pantry) -> u64 {
+    let common_keys = pantry
+        .stock
+        .keys()
+        .filter(|key| recipe.ingredients.contains_key(key.to_owned()))
+        .cloned()
+        .collect::<Vec<_>>();
+
+    if common_keys.is_empty() {
+        return 0;
+    }
+
+    let maximum_cookies = common_keys
+        .iter()
+        .map(|key| {
+            pantry.stock.get(key).unwrap().as_u64().unwrap()
+                / recipe.ingredients.get(key).unwrap().as_u64().unwrap()
+        })
+        .min()
+        .unwrap();
+
+    maximum_cookies
+}
+
+fn left_pantry(baked_cookies: u64, pantry: &mut Pantry, recipe: &Recipe) {
+    pantry
+        .stock
+        .iter_mut()
+        .filter_map(|(key, val_p)| {
+            recipe.ingredients.get(key).map(|val_r| {
+                (
+                    key.to_owned(),
+                    serde_json::to_value(
+                        val_p.as_u64().unwrap() - (baked_cookies * val_r.as_u64().unwrap()),
+                    )
+                    .unwrap(),
+                )
+            })
+        })
+        .collect::<HashMap<String, Value>>()
+        .into_iter()
+        .for_each(|(key, value)| {
+            pantry.stock.insert(key, value);
+        });
 }
 
 fn parse(hmap: &HeaderMap) -> Result<String, StatusCode> {
@@ -53,6 +98,7 @@ fn parse(hmap: &HeaderMap) -> Result<String, StatusCode> {
             let cookie_str = cookie
                 .to_str()
                 .map_err(|_| StatusCode::UNSUPPORTED_MEDIA_TYPE)?;
+
             let trimmed_cookie = cookie_str.trim_start_matches("recipe=");
 
             let recipe_bytes = match general_purpose::STANDARD.decode(trimmed_cookie) {
@@ -81,57 +127,25 @@ pub async fn bake<B>(req: Request<B>) -> impl IntoResponse {
 
     tracing::info!("bake => COOKIE: {:?}", cookie);
 
-    let recpan = parse_json_to_any_struct(&cookie).unwrap();
+    let recpan = parse_json_cookie(&cookie).unwrap();
 
     tracing::info!("bake => RECPAN: {:?}", recpan.fields);
 
-    let recipe: Recipe =
-        match serde_json::from_value(recpan.fields.get("recipe").unwrap().to_owned()) {
-            Ok(rec) => rec,
-            Err(_) => {
-                // This means the request was sent by an Elf
-                // So we create a response specifically for Elves
-                let pantry = recpan.fields.get("pantry").unwrap().to_owned();
+    let recipe = parse_value_to_recipe(recpan.fields.get("recipe").unwrap().to_owned()).unwrap();
 
-                tracing::info!("bake => PANTRY: {:?}", pantry);
+    tracing::info!("bake => RECIPE: {:?}", recipe.ingredients);
 
-                return Ok(Json(BakeResponse { cookie: 0, pantry }));
-            }
-        };
+    let mut pantry =
+        parse_value_to_pantry(recpan.fields.get("pantry").unwrap().to_owned()).unwrap();
 
-    tracing::info!("bake => RECIPE: {:?}", recipe);
+    tracing::info!("bake => PANTRY: {:?}", pantry.stock);
 
-    let pantry: Pantry =
-        match serde_json::from_value(recpan.fields.get("pantry").unwrap().to_owned()) {
-            Ok(pan) => pan,
-            Err(_) => {
-                // This means the request was sent by an Elf
-                // So we create a response specifically for Elves
-                let pantry = recpan.fields.get("pantry").unwrap().to_owned();
+    let baked_cookies = total_baked(&recipe, &pantry);
 
-                tracing::info!("bake => PANTRY: {:?}", pantry);
-
-                return Ok(Json(BakeResponse { cookie: 0, pantry }));
-            }
-        };
-
-    tracing::info!("bake => PANTRY: {:?}", pantry);
-
-    let cooked_cookies = pantry.flour / recipe.flour;
-
-    let left_pantry: Pantry = Pantry {
-        flour: pantry.flour - (cooked_cookies * recipe.flour),
-        sugar: pantry.sugar - (cooked_cookies * recipe.sugar),
-        butter: pantry.butter - (cooked_cookies * recipe.butter),
-        baking_powder: pantry.baking_powder - (cooked_cookies * recipe.baking_powder),
-        chocolate_chips: pantry.chocolate_chips - (cooked_cookies * recipe.chocolate_chips),
-    };
+    left_pantry(baked_cookies, &mut pantry, &recipe);
 
     Ok(Json(BakeResponse {
-        cookie: cooked_cookies,
-        pantry: match serde_json::to_value(left_pantry) {
-            Ok(pantry) => pantry,
-            Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
-        },
+        cookie: baked_cookies,
+        pantry: pantry.stock,
     }))
 }
